@@ -102,3 +102,10 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+t1
+t2
+t3
+train.csv
+test.csv
+t4
+supertest.py
