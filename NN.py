@@ -201,10 +201,11 @@ def costJ(X, Y, thetas, regRate):
         ans = numToLogicalArray(int(Y[i]))
         
         dLast = aLastI - ans
+        dLast = np.atleast_2d(dLast).T #10,null -> 10,1
         
         #final theta layer gradients
-        a4i = aList[lastL-1][i]
-        tGrads[lastL-1] = tGrads[lastL-1] + np.outer(dLast, a4i)
+        a4i = aList[lastL-1][[i]] #column array
+        tGrads[lastL-1] = tGrads[lastL-1] + dLast @ a4i
         
         
         deltas = [dLast]
@@ -215,20 +216,21 @@ def costJ(X, Y, thetas, regRate):
             
             t2Index = (lastL-1) - l
             d2Index = l
-            d2 = np.atleast_2d(deltas[d2Index]).T
+            d2 = deltas[d2Index]
             
             itm = thetas[t2Index].T @ d2 #a4 partial deriv
             itm = np.delete(itm, 0) #remove bias deriv
             delta = np.multiply(itm,  sigmoid(z2i, grad=True))
+            delta = np.atleast_2d(delta).T
             
             deltas.append(delta)
             
             aIndex = (lastL-2) - l
-            a1i = aList[aIndex][i]
+            a1i = aList[aIndex][[i]]
             
             tIndex = (lastL-2) - l
             dIndex = l + 1
-            tGrads[tIndex] = tGrads[tIndex] + np.outer(deltas[dIndex], a1i)
+            tGrads[tIndex] = tGrads[tIndex] + deltas[dIndex] @ a1i
             
 
 
