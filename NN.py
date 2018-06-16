@@ -18,8 +18,8 @@ sizeL = [784, 100, 50, 25, 10]
 numSamples = 42000
 
 regRate = (1/3)
-learningRate = .05
-iterations = 10
+learningRate = .02
+iterations = 50000
 
 #%%
 #load data
@@ -115,7 +115,7 @@ def sigmoid(X, grad=False):
 def addBiasColumn(a):
     return np.append(np.ones((a.shape[0], 1)), a, axis=1)
 
-def feedFowardLayer(a, theta, addBias = True):
+def feedFowardLayer(a, theta, addBias):
     z = a @ theta.T
     a = sigmoid(z)
     if(addBias == True):
@@ -161,7 +161,6 @@ def costJ(X, Y, thetas, regRate):
     J = 0.0
     m = X.shape[0]
     lastL = len(thetas)
-    #lastA = 
     
     tGrads = []
     for i in range(lastL):
@@ -193,7 +192,13 @@ def costJ(X, Y, thetas, regRate):
     
     J = J + reg
     
-    #Gradients
+    #Gradients-----SPLIT INTO ANOTHER METHOD
+    
+    #get smaller subset to calculate gradients
+    X, Y = randomSample(X, Y, 600)
+    m = X.shape[0]
+    aList, zList = feedForwardNetwork(X, thetas)
+    
     for i in range(0,m):
     
         aLastI = aList[lastL][i]
@@ -245,6 +250,19 @@ def costJ(X, Y, thetas, regRate):
     
     
     return J, tGrads
+    
+
+def randomSample(X, Y, amount):
+    #if amount is larger than dataset, use the entire dataset
+    if amount > X.shape[0]:
+        amount = X.shape[0]
+        
+    indecies = np.random.randint(0, X.shape[0], size=(amount))
+    
+    sampleX = X[indecies, :]
+    sampleY = Y[indecies]
+    
+    return sampleX, sampleY
     
     
 def trainNetworkOnce(X, Y, thetas, regRate, learnRate, printRes = True):
@@ -322,7 +340,7 @@ def outputPredictions(predicitonData, thetas, nameFile='results.csv'):
 
 thetas = trainNetwork(X,Y, thetas, regRate, learningRate, iterations)
     
-#saveThetaMatrix(thetas)
+saveThetaMatrix(thetas)
 
 #%%    
 #plotLearningRate(X, Y, xcv, ycv, regRate, learningRate, sizeL, iterations)
