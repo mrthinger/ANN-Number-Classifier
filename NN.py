@@ -6,24 +6,23 @@ NN - Number classifier
 
     100x785  50x76    25x51    10x26
 """
+import pandas as pd
+import numpy as np
+import time
 
 #%%
-#Parameters
-l1Size = 784
-l2Size = 100
-l3Size = 50
-l4Size = 25
-l5Size = 10
+#Parameters (last layer needs to be 10 and first layer always needs to be 784)
+#hidden layer size and amount of hidden layers are variable
+sizeL = [784, 100, 50, 25, 10]
 
 numSamples = 42000
 
 regRate = (1/3)
-learningRate = .05
-iterations = 5000
+learningRate = .02
+iterations = 50000
+
 #%%
-import pandas as pd
-import numpy as np
-import time
+#load data
 
 data = pd.read_csv('train.csv', dtype='float64', nrows = numSamples)
 predata = pd.read_csv('test.csv', dtype='float64')
@@ -36,50 +35,75 @@ cvSamples = int(numSamples * 0.25)
 
 #%%
 #Process Data
-X = data.iloc[list(range(0,trainSamples)),list(range(1,785))].values
-Y = data.iloc[list(range(0,trainSamples)), 0].values
+X = data.iloc[0:trainSamples, 1:785].values
+Y = data.iloc[0:trainSamples, 0].values
 
-xcv = data.iloc[list(range(trainSamples,trainSamples+cvSamples)),list(range(1,785))].values
-ycv = data.iloc[list(range(trainSamples,trainSamples+cvSamples)), 0].values
+xcv = data.iloc[trainSamples:trainSamples+cvSamples, 1:785].values
+ycv = data.iloc[trainSamples:trainSamples+cvSamples, 0].values
 
 #normalize data
-def normData(X, mean, std):
-    return (X-mean) / std
+def normData(X, mean=False, std=False):
+    
+    if(mean==False and std == False):
+        mean = np.mean(X)
+        std = np.std(X)
+        return ((X-mean) / std), mean, std
+    else:
+        return ((X-mean) / std)
 
-meanX = np.mean(X)
-stdX = np.std(X)
-
-X = normData(X, meanX, stdX)
+X, meanX, stdX = normData(X)
 xcv = normData(xcv, meanX, stdX)
 predata = normData(predata, meanX, stdX)
 
 #%%
 #initialize wts
 
-def loadThetaMatrix(fName):
-    t = pd.read_csv(fName)
-    return t.values
+def loadThetaMatrix(fName, dims):
+    t = False
+    try:
+        t = pd.read_csv(fName)
+        t = t.values
+    except FileNotFoundError:
+        return False
+    
+    if(t.shape != dims):
+        return False
+    else:
+        return t
 
-sizet1 = (l2Size,l1Size+1)
-sizet2 = (l3Size,l2Size+1)
-sizet3 = (l4Size,l3Size+1)
-sizet4 = (l5Size,l4Size+1)
+def randThetaMatrix(dims):
+    eps = np.sqrt(6) / np.sqrt(dims[0] + dims[1])
+    #range of wts is [-eps, eps]
+    theta = np.random.random_sample(dims) * (2*eps) - eps
+    return theta
 
-#range of wts
-epst1 = np.sqrt(6) / np.sqrt(sizet1[0] + sizet1[1])
-epst2 = np.sqrt(6) / np.sqrt(sizet2[0] + sizet2[1])
-epst3 = np.sqrt(6) / np.sqrt(sizet3[0] + sizet3[1])
-epst4 = np.sqrt(6) / np.sqrt(sizet4[0] + sizet4[1])
-
-theta1 = np.random.random_sample(sizet1) * (2*epst1) - epst1
-theta2 = np.random.random_sample(sizet2) * (2*epst2) - epst2
-theta3 = np.random.random_sample(sizet3) * (2*epst3) - epst3
-theta4 = np.random.random_sample(sizet4) * (2*epst4) - epst4
-
-theta1 = loadThetaMatrix('t1')
-theta2 = loadThetaMatrix('t2')
-theta3 = loadThetaMatrix('t3')
-theta4 = loadThetaMatrix('t4')
+def initializeTheta(lSizes, forceRand = False):
+    nLayers = len(sizeL)
+    theta = []
+    for i in range(nLayers-1):
+        
+        if(forceRand == False):
+            name = "t" + str(i+1) + ".csv"
+            dims = (lSizes[i+1], lSizes[i]+1)
+            
+            #attempts to load file first
+            t = loadThetaMatrix(name, dims)
+            
+            #check to see if file was loaded correctly
+            if isinstance(t, bool):
+                #if it wasnt gen a new matrix
+                t = randThetaMatrix(dims)
+            
+           
+        else:
+            t = randThetaMatrix(dims)
+            
+        theta.append(t)
+        
+    return theta
+                
+        
+thetas = initializeTheta(sizeL)
 #%%
 def sigmoid(X, grad=False):
     if grad:
@@ -88,70 +112,69 @@ def sigmoid(X, grad=False):
     else:    
         return 1 / ( 1+ np.exp(-1*X))
 #%%
-def predict(X, theta1, theta2, theta3, theta4):
-    m = X.shape[0]
+def addBiasColumn(a):
+    return np.append(np.ones((a.shape[0], 1)), a, axis=1)
+
+def feedFowardLayer(a, theta, addBias):
+    z = a @ theta.T
+    a = sigmoid(z)
+    if(addBias == True):
+        a = addBiasColumn(a)
+    return a, z        
+
+def feedForwardNetwork(X, thetas):
+    steps = len(thetas)
  
+    #add biases to input layer
+    a1 = addBiasColumn(X)
     
     #Feed-forward
-    a1 = np.append(np.ones((m, 1)), X, axis=1)
-    
-    z2 = a1 @ theta1.T
-    a2 = sigmoid(z2)
-    a2 = np.append(np.ones((a2.shape[0], 1)), a2, axis=1)
-    
-    z3 = a2 @ theta2.T
-    a3 = sigmoid(z3)
-    a3 = np.append(np.ones((a3.shape[0], 1)), a3, axis=1)
-    
-    z4 = a3 @ theta3.T
-    a4 = sigmoid(z4)
-    a4 = np.append(np.ones((a4.shape[0], 1)), a4, axis=1)
-    
-    z5 = a4 @ theta4.T
-    a5 = sigmoid(z5)
-    
-    
-    predictions = np.argmax(a5,axis=1)
+    aList = [a1]
+    zList = [X]
+    for i in range(steps):
         
+        #dont add bias to result layer
+        addBias = True
+        if(i == steps-1):
+            addBias = False
+            
+        a, z = feedFowardLayer(aList[i], thetas[i], addBias)  
+        aList.append(a)
+        zList.append(z) 
+
+    return aList, zList
+
+def predict(X, thetas):
+    steps = len(thetas)
+    aList = feedForwardNetwork(X, thetas)
+    predictions = np.argmax(aList[steps],axis=1)
+    
     return predictions
     
-
-def costJ(X, Y, theta1, theta2, theta3, theta4, regRate):
+def numToLogicalArray(num):
+     ans = np.zeros(10)
+     ans[num] = 1
+     return ans
+    
+def costJ(X, Y, thetas, regRate):
     #helpful vars
     J = 0.0
-    theta1Grads = np.zeros(theta1.shape)
-    theta2Grads = np.zeros(theta2.shape)
-    theta3Grads = np.zeros(theta3.shape)
-    theta4Grads = np.zeros(theta4.shape)
-    
     m = X.shape[0]
+    lastL = len(thetas)
     
+    tGrads = []
+    for i in range(lastL):
+        tGrads.append(np.zeros(thetas[i].shape))
     
+   
     #Feed-forward
-    a1 = np.append(np.ones((m, 1)), X, axis=1)
+    aList, zList = feedForwardNetwork(X, thetas)
     
-    z2 = a1 @ theta1.T
-    a2 = sigmoid(z2)
-    a2 = np.append(np.ones((a2.shape[0], 1)), a2, axis=1)
-    
-    z3 = a2 @ theta2.T
-    a3 = sigmoid(z3)
-    a3 = np.append(np.ones((a3.shape[0], 1)), a3, axis=1)
-    
-    z4 = a3 @ theta3.T
-    a4 = sigmoid(z4)
-    a4 = np.append(np.ones((a4.shape[0], 1)), a4, axis=1)
-    
-    z5 = a4 @ theta4.T
-    a5 = sigmoid(z5)
-    
+    #Cost
     for i in range(0,m):
-        hx = a5[i,:]
+        hx = aList[lastL][i,:]
         
-        num = int(Y[i])
-        
-        ans = np.zeros(10)
-        ans[num] = 1
+        ans = numToLogicalArray(int(Y[i]))
         
         J = J - np.sum(np.multiply(np.log(hx), ans) + np.multiply(np.log(1-hx), 1-ans))
     
@@ -159,141 +182,166 @@ def costJ(X, Y, theta1, theta2, theta3, theta4, regRate):
     
     #cost regularization (j + all nonbias thetas^2 * (regRate/2m))
     
-    nonbiasT1 = theta1[:, 1:theta1.shape[1]]
-    nonbiasT2 = theta2[:, 1:theta2.shape[1]]
-    nonbiasT3 = theta3[:, 1:theta3.shape[1]]
-    nonbiasT4 = theta4[:, 1:theta4.shape[1]]
+    totalTheta = 0.0
     
-    totalTheta = np.sum(np.power(nonbiasT1,2)) + np.sum(np.power(nonbiasT2,2)) 
-    + np.sum(np.power(nonbiasT3,2)) + np.sum(np.power(nonbiasT4,2))
+    for i in range(lastL):
+        nonbiasTheta = thetas[i][:, 1:thetas[i].shape[1]]
+        totalTheta += np.sum(np.power(nonbiasTheta,2))
     
     reg = totalTheta * (regRate/(2*m))
     
     J = J + reg
     
-    #Gradients
+    #Gradients-----SPLIT INTO ANOTHER METHOD
+    
+    #get smaller subset to calculate gradients
+    X, Y = randomSample(X, Y, 600)
+    m = X.shape[0]
+    aList, zList = feedForwardNetwork(X, thetas)
+    
     for i in range(0,m):
     
-        a1i = a1[[i]]
-        a2i = a2[[i]]
-        a3i = a3[[i]]
-        a4i = a4[[i]]
-        a5i = a5[[i]]
+        aLastI = aList[lastL][i]
+        
+        ans = numToLogicalArray(int(Y[i]))
+        
+        dLast = aLastI - ans
+        dLast = np.atleast_2d(dLast).T #10,null -> 10,1
+        
+        #final theta layer gradients
+        a4i = aList[lastL-1][[i]] #column array
+        tGrads[lastL-1] = tGrads[lastL-1] + dLast @ a4i
         
         
-        z2i = z2[i,:].T
-        z3i = z3[i,:].T
-        z4i = z4[i,:].T
+        deltas = [dLast]
         
-        num = int(Y[i])
-        
-        ans = np.zeros((10,1))
-        ans[num] = 1
-        
-        d5 = a5i.T - ans
-        
-        
-        i4 = theta4.T @ d5 #a4 partial deriv
-        i4 = np.delete(i4, 0) #remove bias deriv
-        d4 = np.multiply(i4,  sigmoid(z4i, grad=True))
-        d4 = np.reshape(d4, (d4.size,1))
-        
-        i3 = theta3.T @ d4 #a3 partial deriv
-        i3 = np.delete(i3, 0) #remove bias deriv
-        d3 = np.multiply(i3,  sigmoid(z3i, grad=True))
-        d3 = np.reshape(d3, (d3.size,1))
-        
-        i2 = theta2.T @ d3 #a2 partial deriv
-        i2 = np.delete(i2, 0) #remove bias deriv
-        d2 = np.multiply(i2,  sigmoid(z2i, grad=True))
-        d2 = np.reshape(d2, (d2.size,1))
-        
-        
-        theta1Grads = theta1Grads + d2 @ a1i
-        theta2Grads = theta2Grads + d3 @ a2i
-        theta3Grads = theta3Grads + d4 @ a3i
-        theta4Grads = theta4Grads + d5 @ a4i
-        
-    theta1Grads = theta1Grads / m
-    theta2Grads = theta2Grads / m
-    theta3Grads = theta3Grads / m
-    theta4Grads = theta4Grads / m
+        for l in range(lastL-1):
+            zIndex = (lastL-1) - l
+            z2i = zList[zIndex][i]
+            
+            t2Index = (lastL-1) - l
+            d2Index = l
+            d2 = deltas[d2Index]
+            
+            itm = thetas[t2Index].T @ d2 #a4 partial deriv
+            itm = np.delete(itm, 0) #remove bias deriv
+            delta = np.multiply(itm,  sigmoid(z2i, grad=True))
+            delta = np.atleast_2d(delta).T
+            
+            deltas.append(delta)
+            
+            aIndex = (lastL-2) - l
+            a1i = aList[aIndex][[i]]
+            
+            tIndex = (lastL-2) - l
+            dIndex = l + 1
+            tGrads[tIndex] = tGrads[tIndex] + deltas[dIndex] @ a1i
+            
+
+
+    #take average
+    for i in range(lastL):
+        tGrads[i] = tGrads[i] / m
     
     #regularized gradients ( add nonbias thetas * (regRate/m) )
-    
-    theta1Grads[:, 1:theta1Grads.shape[1]] = theta1Grads[:, 1:theta1Grads.shape[1]] + (regRate/m) * nonbiasT1
-    theta2Grads[:, 1:theta2Grads.shape[1]] = theta2Grads[:, 1:theta2Grads.shape[1]] + (regRate/m) * nonbiasT2
-    theta3Grads[:, 1:theta3Grads.shape[1]] = theta3Grads[:, 1:theta3Grads.shape[1]] + (regRate/m) * nonbiasT3
-    theta4Grads[:, 1:theta4Grads.shape[1]] = theta4Grads[:, 1:theta4Grads.shape[1]] + (regRate/m) * nonbiasT4
+    for i in range(lastL):
+        nonbiasTheta = thetas[i][:, 1:thetas[i].shape[1]]
+        tGrads[i][:, 1:tGrads[i].shape[1]] = tGrads[i][:, 1:tGrads[i].shape[1]] + (regRate/m) * nonbiasTheta
     
     
-    return J,theta1Grads,theta2Grads,theta3Grads,theta4Grads
+    return J, tGrads
+    
+
+def randomSample(X, Y, amount):
+    #if amount is larger than dataset, use the entire dataset
+    if amount > X.shape[0]:
+        amount = X.shape[0]
+        
+    indecies = np.random.randint(0, X.shape[0], size=(amount))
+    
+    sampleX = X[indecies, :]
+    sampleY = Y[indecies]
+    
+    return sampleX, sampleY
     
     
-def trainNetwork(X, Y, theta1, theta2, theta3, theta4, regRate, learnRate, iters):
-    
-    for i in range (0,iters):
-        #calculate gradients
+def trainNetworkOnce(X, Y, thetas, regRate, learnRate, printRes = True):
         startTime = time.time()
         
-        cost, theta1Grads, theta2Grads, theta3Grads, theta4Grads = costJ(X, Y, theta1, theta2, theta3, theta4, regRate)
+        cost, tGrads = costJ(X, Y, thetas, regRate)
         
         #update thetas
-        theta1 = theta1 - learnRate * theta1Grads
-        theta2 = theta2 - learnRate * theta2Grads
-        theta3 = theta3 - learnRate * theta3Grads
-        theta4 = theta4 - learnRate * theta4Grads
+        for i in range(len(thetas)):
+            thetas[i] = thetas[i] - learnRate * tGrads[i]
         
         endTime = time.time()
         
         deltaTime = endTime - startTime
         
-        print('iteration',i,cost, deltaTime) 
+        if(printRes):
+            print('Cost:', cost, 'Seconds:', deltaTime) 
         
-    return theta1, theta2, theta3, theta4
+        return thetas
+    
+    
+    
+def trainNetwork(X, Y, thetas, regRate, learnRate, iters, printRes = True):
+    
+    for i in range (0,iters):
+        if(printRes):
+            print('iteration',i) 
+            
+        thetas = trainNetworkOnce(X, Y, thetas, regRate, learnRate, printRes)
+        
+        
+    return thetas
 
 
-def plotLearningRate(X, Y, XCV, YCV, theta1, theta2, theta3, theta4, regRate, learningRate, iters):
+def plotLearningRate(X, Y, XCV, YCV, regRate, learningRate, sizeL, iters):
     
     m=X.shape[0]
+    
+    thetas = initializeTheta(sizeL, forceRand = True)
     
     for i in range(1, m):
         XTSub = X[0:i,:]
         YTSub = Y[0:i]
         
-        theta1, theta2, theta3, theta4 = trainNetwork(XTSub,YTSub,theta1,theta2,theta3, theta4, regRate, learningRate, iterations)
-        costTrain, t, t, t, t = costJ(XTSub,YTSub,theta1,theta2,theta3,theta4,0)
-        costCV, t, t, t, t = costJ(XCV,YCV,theta1,theta2,theta3,theta4,0)
+        thetas = trainNetwork(XTSub,YTSub, thetas, learningRate, iterations)
+        costTrain, grads = costJ(XTSub,YTSub,thetas,0)
+        costCV, grads= costJ(XCV,YCV,thetas,0)
         print('i', i, 'T:',costTrain,'CV:', costCV)
-#%%    
-#plotLearningRate(X, Y, xcv, ycv, theta1, theta2, theta3, theta4, regRate, learningRate, iterations)
-#validation curve (try training with different lambdas)
-#%% Train
-theta1, theta2, theta3, theta4 = trainNetwork(X,Y,theta1,theta2, theta3,theta4,regRate, learningRate, iterations)
-
-def saveThetaMatrix(t, name):
-    pd.DataFrame(t).to_csv(name, index = False)
-    
-saveThetaMatrix(theta1, 't1')
-saveThetaMatrix(theta2, 't2')
-saveThetaMatrix(theta3, 't3')
-saveThetaMatrix(theta4, 't4')
-
-#%% Output predictions
-preds = predict(predata, theta1, theta2, theta3, theta4 )
-
-imgNum = np.zeros((preds.size,1), dtype=int)
-
-
-for i in range(0, imgNum.shape[0]):
-    imgNum[i] += i+1
-
-preds = np.reshape(preds, (preds.size,1))
-
-preds = pd.DataFrame(np.append(imgNum,preds, axis = 1))
-
-
 
 #%%
-preds.columns = ['ImageId','Label']
-preds.to_csv('results.csv', index = False)
+def saveThetaMatrix(thetas):
+    for i in range(len(thetas)):
+        name = "t" + str(i+1) + ".csv"  
+        pd.DataFrame(thetas[i]).to_csv(name, index = False)
+
+#%% Output predictions
+
+def outputPredictions(predicitonData, thetas, nameFile='results.csv'):
+    preds = predict(predicitonData, thetas)
+    
+    imgNum = np.zeros((preds.size,1), dtype=int)
+    
+    
+    for i in range(0, imgNum.shape[0]):
+        imgNum[i] += i+1
+    
+    preds = np.reshape(preds, (preds.size,1))
+    
+    preds = pd.DataFrame(np.append(imgNum,preds, axis = 1))
+ 
+    preds.columns = ['ImageId','Label']
+    preds.to_csv(nameFile, index = False)
+
+
+
+thetas = trainNetwork(X,Y, thetas, regRate, learningRate, iterations)
+    
+saveThetaMatrix(thetas)
+
+#%%    
+#plotLearningRate(X, Y, xcv, ycv, regRate, learningRate, sizeL, iterations)
+#validation curve (try training with different lambdas)
