@@ -81,10 +81,10 @@ def initializeTheta(lSizes, forceRand = False):
     nLayers = len(sizeL)
     theta = []
     for i in range(nLayers-1):
+        dims = (lSizes[i+1], lSizes[i]+1)
         
         if(forceRand == False):
             name = "t" + str(i+1) + ".csv"
-            dims = (lSizes[i+1], lSizes[i]+1)
             
             #attempts to load file first
             t = loadThetaMatrix(name, dims)
