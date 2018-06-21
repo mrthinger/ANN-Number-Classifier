@@ -17,8 +17,8 @@ sizeL = [784, 100, 50, 25, 10]
 
 numSamples = 42000
 
-regRate = (1/3)
-learningRate = .02
+regRate = (1/8)
+learningRate = .03
 iterations = 50000
 
 #%%
@@ -146,7 +146,7 @@ def feedForwardNetwork(X, thetas):
 
 def predict(X, thetas):
     steps = len(thetas)
-    aList = feedForwardNetwork(X, thetas)
+    aList, zList = feedForwardNetwork(X, thetas)
     predictions = np.argmax(aList[steps],axis=1)
     
     return predictions
